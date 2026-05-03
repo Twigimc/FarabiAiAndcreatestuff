@@ -10,7 +10,37 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
 
 $error = '';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+// Get user IP
+$ip_address = $_SERVER['REMOTE_ADDR'];
+
+// Check rate limit (Max 5 attempts, 15 minutes lockout)
+$max_attempts = 5;
+$lockout_time = 15; // in minutes
+$is_locked_out = false;
+
+try {
+    $stmt = $pdo->prepare("SELECT attempts, last_attempt FROM login_attempts WHERE ip_address = ?");
+    $stmt->execute([$ip_address]);
+    $record = $stmt->fetch();
+
+    if ($record) {
+        $last_attempt_time = strtotime($record['last_attempt']);
+        $time_diff_minutes = (time() - $last_attempt_time) / 60;
+
+        if ($record['attempts'] >= $max_attempts && $time_diff_minutes < $lockout_time) {
+            $is_locked_out = true;
+            $remaining_time = ceil($lockout_time - $time_diff_minutes);
+            $error = "تم حظر الدخول مؤقتاً بسبب كثرة المحاولات الفاشلة. الرجاء المحاولة بعد $remaining_time دقيقة.";
+        } elseif ($time_diff_minutes >= $lockout_time) {
+            // Reset if lockout time has passed
+            $pdo->prepare("UPDATE login_attempts SET attempts = 0 WHERE ip_address = ?")->execute([$ip_address]);
+        }
+    }
+} catch(PDOException $e) {
+    $error = "حدث خطأ أثناء الاتصال بقاعدة البيانات.";
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$is_locked_out) {
     // Generate CSRF token if not exists
     if (empty($_SESSION['login_csrf_token'])) {
         $_SESSION['login_csrf_token'] = bin2hex(random_bytes(32));
@@ -30,7 +60,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $admin = $stmt->fetch();
 
             if ($admin && password_verify($password, $admin['password_hash'])) {
-                // Successful login
+                // Successful login -> Clear attempts
+                $pdo->prepare("DELETE FROM login_attempts WHERE ip_address = ?")->execute([$ip_address]);
+
                 $_SESSION['admin_logged_in'] = true;
                 $_SESSION['admin_id'] = $admin['id'];
                 
@@ -41,6 +73,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 exit;
             } else {
                 $error = "اسم المستخدم أو كلمة المرور غير صحيحة.";
+                
+                // Increment failed attempts
+                $stmt = $pdo->prepare("INSERT INTO login_attempts (ip_address, attempts) VALUES (?, 1) ON DUPLICATE KEY UPDATE attempts = attempts + 1, last_attempt = CURRENT_TIMESTAMP");
+                $stmt->execute([$ip_address]);
             }
         } catch(PDOException $e) {
             $error = "حدث خطأ أثناء الاتصال بقاعدة البيانات.";
