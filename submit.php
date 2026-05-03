@@ -1,4 +1,5 @@
 <?php
+session_start();
 header('Content-Type: application/json');
 require_once 'db.php';
 
@@ -7,6 +8,12 @@ $data = json_decode(file_get_contents('php://input'), true);
 
 if (!$data) {
     echo json_encode(['status' => 'error', 'message' => 'No data received']);
+    exit;
+}
+
+// Validate CSRF token
+if (empty($data['csrf_token']) || empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $data['csrf_token'])) {
+    echo json_encode(['status' => 'error', 'message' => 'Invalid CSRF token. Please refresh the page and try again.']);
     exit;
 }
 

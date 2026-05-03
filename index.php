@@ -1,3 +1,9 @@
+<?php
+session_start();
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+?>
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -795,6 +801,7 @@
       "موافقة رئيس القسم":       getRadio('موافقة رئيس القسم'),
       "مستوى الأولوية":          document.getElementById('f_priority').value || '—',
       "ملاحظات إضافية":         document.getElementById('f_notes').value,
+      "csrf_token":             "<?php echo $_SESSION['csrf_token']; ?>"
     };
 
     // Send

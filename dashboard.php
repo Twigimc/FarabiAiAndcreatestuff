@@ -1,4 +1,9 @@
 <?php
+session_start();
+if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
+    header('Location: login.php');
+    exit;
+}
 require_once 'db.php';
 
 try {
@@ -117,6 +122,7 @@ try {
         <div class="actions">
             <a href="export_excel.php" class="btn">تصدير إلى Excel</a>
             <button onclick="exportPDF()" class="btn btn-pdf">تصدير إلى PDF</button>
+            <a href="logout.php" class="btn" style="background:#e74c3c; color:#fff;">تسجيل الخروج</a>
         </div>
     </div>
 
